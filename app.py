@@ -34,6 +34,7 @@ def load_data():
     df = pd.read_sql("""
         SELECT cs.division, cs.department, cs.subject, cs.catalog, cs.descr,
                cs.faculty_name, cs.enrollment_capacity, cs.waitlist_capacity,
+               cs.start_date,
                ws.snapshot_date, ws.total_enrolled, ws.seats_available,
                ws.total_on_waitlist, ws.class_stat
         FROM weekly_snapshot ws
