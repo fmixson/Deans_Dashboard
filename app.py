@@ -79,6 +79,7 @@ if selected_division != "All":
 else:
     filtered = df
 
+latest_filtered = latest if selected_division == "All" else latest[latest["division"] == selected_division]
 # -----------------------------------------------------------------
 # TREND CHART
 # Pandas does the GROUP BY here instead of SQL — same concept you
@@ -150,7 +151,7 @@ st.dataframe(
 st.divider()
 
 st.subheader(f"Section Details — {latest_date}")
-latest_filtered = latest if selected_division == "All" else latest[latest["division"] == selected_division]
+
 st.dataframe(
     latest_filtered[[
         "subject", "catalog", "descr", "faculty_name",
