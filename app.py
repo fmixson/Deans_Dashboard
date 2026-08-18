@@ -9,7 +9,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from classification import classify_sections
-from division_summary import build_division_comparison
+from division_summary import build_division_comparison, build_department_comparison
 
 DB_PATH = "db/dashboard.db"
 
@@ -87,6 +87,28 @@ if selected_division == "All":
     st.caption("Select a division from the sidebar to see its detailed breakdown.")
 
 else:
+    st.subheader("Department Breakdown")
+    dept_prior = prior_week_full[prior_week_full["division"] == selected_division]
+    dept_comparison = build_department_comparison(latest_filtered, dept_prior)
+    dept_display = dept_comparison[[
+        "department", "current_sections", "prior_sections",
+        "current_enrolled", "prior_enrolled", "enrolled_change",
+        "current_fill", "critically_low", "low_not_growing",
+    ]].rename(columns={
+        "department": "Dept",
+        "current_sections": "Current Sections",
+        "prior_sections": "Prior Sections",
+        "current_enrolled": "Current Enrolled",
+        "prior_enrolled": "Prior Enrolled",
+        "enrolled_change": "Change",
+        "current_fill": "Current Fill",
+        "critically_low": "Critically Low",
+        "low_not_growing": "Low & Not Growing",
+    })
+    st.dataframe(dept_display, use_container_width=True, hide_index=True)
+
+    st.divider()
+
     st.subheader(f"Enrollment Trend — {selected_division}")
     trend = (
         filtered.groupby(["snapshot_date", "division"])["total_enrolled"]
