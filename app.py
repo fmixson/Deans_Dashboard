@@ -9,6 +9,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from classification import classify_sections
+from division_summary import build_division_comparison
 
 DB_PATH = "db/dashboard.db"
 
@@ -39,8 +40,10 @@ prior_date = all_dates[-2] if len(all_dates) >= 2 else None
 
 current_week = df[df["snapshot_date"] == latest_date].copy()
 if prior_date:
-    prior_week = df[df["snapshot_date"] == prior_date][["class_nbr", "total_enrolled"]]
+    prior_week_full = df[df["snapshot_date"] == prior_date].copy()
+    prior_week = prior_week_full[["class_nbr", "total_enrolled"]]
 else:
+    prior_week_full = pd.DataFrame(columns=df.columns)
     prior_week = pd.DataFrame(columns=["class_nbr", "total_enrolled"])
 
 latest = classify_sections(current_week, prior_week)
@@ -67,57 +70,74 @@ else:
 
 latest_filtered = latest if selected_division == "All" else latest[latest["division"] == selected_division]
 
-st.subheader("Enrollment Trend by Division")
-trend = (
-    filtered.groupby(["snapshot_date", "division"])["total_enrolled"]
-    .sum()
-    .reset_index()
-    .pivot(index="snapshot_date", columns="division", values="total_enrolled")
-)
-st.line_chart(trend)
+if selected_division == "All":
+    st.subheader("Division Comparison")
+    st.caption(f"Current week ({latest_date}) vs. prior week ({prior_date})")
 
-st.subheader("At-Risk Sections")
-st.caption("Critically low, low & not growing, or cancelled — starting within 4 weeks")
+    comparison = build_division_comparison(latest, prior_week_full)
+    st.dataframe(
+        comparison[[
+            "division", "current_sections", "prior_sections", "section_change",
+            "current_enrolled", "prior_enrolled", "current_fill",
+            "critically_low", "low_not_growing", "cancelled",
+        ]],
+        use_container_width=True,
+        hide_index=True,
+    )
+    st.caption("Select a division from the sidebar to see its detailed breakdown.")
 
-at_risk_mask = (
-    latest_filtered["critically_low"] |
-    latest_filtered["low_not_growing"] |
-    (latest_filtered["class_stat"] == "Cancelled Section")
-)
-at_risk = latest_filtered[at_risk_mask].copy()
+else:
+    st.subheader(f"Enrollment Trend — {selected_division}")
+    trend = (
+        filtered.groupby(["snapshot_date", "division"])["total_enrolled"]
+        .sum()
+        .reset_index()
+        .pivot(index="snapshot_date", columns="division", values="total_enrolled")
+    )
+    st.line_chart(trend)
 
-at_risk["start_date_parsed"] = pd.to_datetime(at_risk["start_date"], errors="coerce")
-weeks_until_start = (at_risk["start_date_parsed"] - pd.Timestamp.now()).dt.days / 7
-at_risk = at_risk[weeks_until_start < 4]
+    st.subheader("At-Risk Sections")
+    st.caption("Critically low, low & not growing, or cancelled — starting within 4 weeks")
 
-def risk_reason(row):
-    if row["class_stat"] == "Cancelled Section":
-        return "Cancelled"
-    if row["critically_low"]:
-        return "Critically low enrollment"
-    if row["low_not_growing"]:
-        return "Low fill, not growing"
-    return "Other"
+    at_risk_mask = (
+        latest_filtered["critically_low"] |
+        latest_filtered["low_not_growing"] |
+        (latest_filtered["class_stat"] == "Cancelled Section")
+    )
+    at_risk = latest_filtered[at_risk_mask].copy()
 
-at_risk["risk_reason"] = at_risk.apply(risk_reason, axis=1)
+    at_risk["start_date_parsed"] = pd.to_datetime(at_risk["start_date"], errors="coerce")
+    weeks_until_start = (at_risk["start_date_parsed"] - pd.Timestamp.now()).dt.days / 7
+    at_risk = at_risk[weeks_until_start < 4]
 
-st.dataframe(
-    at_risk[[
-        "subject", "catalog", "descr", "faculty_name",
-        "total_enrolled", "enrollment_capacity", "fill_rate", "risk_reason"
-    ]],
-    use_container_width=True,
-    hide_index=True,
-)
+    def risk_reason(row):
+        if row["class_stat"] == "Cancelled Section":
+            return "Cancelled"
+        if row["critically_low"]:
+            return "Critically low enrollment"
+        if row["low_not_growing"]:
+            return "Low fill, not growing"
+        return "Other"
 
-st.divider()
+    at_risk["risk_reason"] = at_risk.apply(risk_reason, axis=1)
 
-st.subheader(f"Section Details — {latest_date}")
-st.dataframe(
-    latest_filtered[[
-        "subject", "catalog", "descr", "faculty_name",
-        "total_enrolled", "enrollment_capacity", "total_on_waitlist", "class_stat"
-    ]],
-    use_container_width=True,
-    hide_index=True,
-)
+    st.dataframe(
+        at_risk[[
+            "subject", "catalog", "descr", "faculty_name",
+            "total_enrolled", "enrollment_capacity", "fill_rate", "risk_reason"
+        ]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.divider()
+
+    st.subheader(f"Section Details — {latest_date}")
+    st.dataframe(
+        latest_filtered[[
+            "subject", "catalog", "descr", "faculty_name",
+            "total_enrolled", "enrollment_capacity", "total_on_waitlist", "class_stat"
+        ]],
+        use_container_width=True,
+        hide_index=True,
+    )
