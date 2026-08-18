@@ -1,99 +1,123 @@
 """
-classification.py
-------------------
-Shared logic for classifying section risk. Every table on both the
-landing page and the drill-down page will eventually call these
-functions, so we're building and testing them in isolation first,
-separate from any dashboard code.
+app.py
+------
+Dean's enrollment dashboard. Run with:
+    streamlit run app.py
 """
 
+import streamlit as st
 import pandas as pd
+import sqlite3
+from classification import classify_sections
+
+DB_PATH = "db/dashboard.db"
+
+st.set_page_config(page_title="Enrollment Dashboard", layout="wide")
 
 
-def add_growth_column(df_current, df_prior):
-    """
-    Adds an 'enrolled_prior' and 'growth' column to df_current by
-    matching each section (class_nbr) to its enrollment from a
-    PRIOR week's snapshot.
-
-    A section with no matching prior-week row (e.g. a brand-new
-    section that didn't exist last week) gets growth = NaN — we
-    genuinely don't know if it "grew," so we leave it undetermined
-    rather than guessing.
-    """
-    prior_lookup = df_prior[["class_nbr", "total_enrolled"]].rename(
-        columns={"total_enrolled": "enrolled_prior"}
-    )
-    df = df_current.merge(prior_lookup, on="class_nbr", how="left")
-    df["growth"] = df["total_enrolled"] - df["enrolled_prior"]
+@st.cache_data(ttl=300)
+def load_data():
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql("""
+        SELECT cs.division, cs.department, cs.subject, cs.catalog, cs.descr,
+               cs.faculty_name, cs.enrollment_capacity, cs.waitlist_capacity,
+               cs.start_date, ws.class_nbr,
+               ws.snapshot_date, ws.total_enrolled, ws.seats_available,
+               ws.total_on_waitlist, ws.class_stat
+        FROM weekly_snapshot ws
+        JOIN class_sections cs ON cs.class_nbr = ws.class_nbr
+    """, conn)
+    conn.close()
     return df
 
 
-def add_fill_rate(df):
-    """
-    Adds a 'fill_rate' column: enrolled / capacity.
+df = load_data()
 
-    Sections with zero or missing capacity get fill_rate = NaN
-    instead of a real value — dividing by zero would otherwise
-    crash, or worse, silently give a meaningless result.
-    """
-    df = df.copy()
-    has_valid_capacity = df["enrollment_capacity"] > 0
-    df["fill_rate"] = None
-    df.loc[has_valid_capacity, "fill_rate"] = (
-        df.loc[has_valid_capacity, "total_enrolled"]
-        / df.loc[has_valid_capacity, "enrollment_capacity"]
-    )
-    return df
+all_dates = sorted(df["snapshot_date"].unique())
+latest_date = all_dates[-1]
+prior_date = all_dates[-2] if len(all_dates) >= 2 else None
 
+current_week = df[df["snapshot_date"] == latest_date].copy()
+if prior_date:
+    prior_week = df[df["snapshot_date"] == prior_date][["class_nbr", "total_enrolled"]]
+else:
+    prior_week = pd.DataFrame(columns=["class_nbr", "total_enrolled"])
 
-def add_critically_low_flag(df):
-    """
-    Adds a boolean 'critically_low' column.
+latest = classify_sections(current_week, prior_week)
 
-    Rule: 9 or fewer students enrolled, OR under 25% fill.
-    """
-    df = df.copy()
-    has_valid_fill = df["fill_rate"].notna()
-    df["critically_low"] = (
-        (df["total_enrolled"] <= 9) |
-        (has_valid_fill & (df["fill_rate"] < 0.25))
-    )
-    return df
+st.title("Enrollment Dashboard")
+st.caption(f"Latest data as of {latest_date}")
 
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Total Sections", len(latest))
+col2.metric("Total Enrolled", int(latest["total_enrolled"].sum()))
+col3.metric("Critically Low", int(latest["critically_low"].sum()))
+col4.metric("Low & Not Growing", int(latest["low_not_growing"].sum()))
 
-def add_low_not_growing_flag(df):
-    """
-    Adds a boolean 'low_not_growing' column.
+st.divider()
 
-    Rule: under 50% fill AND no enrollment growth (growth <= 0)
-    in the latest snapshot. Critically Low takes precedence.
-    """
-    df = df.copy()
-    has_valid_fill = df["fill_rate"].notna()
-    has_valid_growth = df["growth"].notna()
+st.sidebar.header("Filters")
+divisions = ["All"] + sorted(df["division"].dropna().unique().tolist())
+selected_division = st.sidebar.selectbox("Division", divisions)
 
-    df["low_not_growing"] = (
-        has_valid_fill & has_valid_growth &
-        (df["fill_rate"] < 0.50) &
-        (df["growth"] <= 0) &
-        (~df["critically_low"])
-    )
-    return df
+if selected_division != "All":
+    filtered = df[df["division"] == selected_division]
+else:
+    filtered = df
 
+latest_filtered = latest if selected_division == "All" else latest[latest["division"] == selected_division]
 
-def add_capacity_issue_flag(df):
-    """
-    Adds a boolean 'capacity_issue' column: True when capacity is
-    zero, missing, or otherwise invalid.
-    """
-    df = df.copy()
-    df["capacity_issue"] = df["fill_rate"].isna()
-    return df
+st.subheader("Enrollment Trend by Division")
+trend = (
+    filtered.groupby(["snapshot_date", "division"])["total_enrolled"]
+    .sum()
+    .reset_index()
+    .pivot(index="snapshot_date", columns="division", values="total_enrolled")
+)
+st.line_chart(trend)
 
+st.subheader("At-Risk Sections")
+st.caption("Critically low, low & not growing, or cancelled — starting within 4 weeks")
 
-def classify_sections(df_current, df_prior):
-    """
-    Runs all steps in order and returns the enriched dataframe.
-    """
-    df =
+at_risk_mask = (
+    latest_filtered["critically_low"] |
+    latest_filtered["low_not_growing"] |
+    (latest_filtered["class_stat"] == "Cancelled Section")
+)
+at_risk = latest_filtered[at_risk_mask].copy()
+
+at_risk["start_date_parsed"] = pd.to_datetime(at_risk["start_date"], errors="coerce")
+weeks_until_start = (at_risk["start_date_parsed"] - pd.Timestamp.now()).dt.days / 7
+at_risk = at_risk[weeks_until_start < 4]
+
+def risk_reason(row):
+    if row["class_stat"] == "Cancelled Section":
+        return "Cancelled"
+    if row["critically_low"]:
+        return "Critically low enrollment"
+    if row["low_not_growing"]:
+        return "Low fill, not growing"
+    return "Other"
+
+at_risk["risk_reason"] = at_risk.apply(risk_reason, axis=1)
+
+st.dataframe(
+    at_risk[[
+        "subject", "catalog", "descr", "faculty_name",
+        "total_enrolled", "enrollment_capacity", "fill_rate", "risk_reason"
+    ]],
+    use_container_width=True,
+    hide_index=True,
+)
+
+st.divider()
+
+st.subheader(f"Section Details — {latest_date}")
+st.dataframe(
+    latest_filtered[[
+        "subject", "catalog", "descr", "faculty_name",
+        "total_enrolled", "enrollment_capacity", "total_on_waitlist", "class_stat"
+    ]],
+    use_container_width=True,
+    hide_index=True,
+)
