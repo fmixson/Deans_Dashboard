@@ -1,10 +1,7 @@
 """
 classification.py
 ------------------
-Shared logic for classifying section risk. Every table on both the
-landing page and the drill-down page will eventually call these
-functions, so we're building and testing them in isolation first,
-separate from any dashboard code.
+Shared logic for classifying section risk.
 """
 
 import pandas as pd
@@ -15,11 +12,6 @@ def add_growth_column(df_current, df_prior):
     Adds an 'enrolled_prior' and 'growth' column to df_current by
     matching each section (class_nbr) to its enrollment from a
     PRIOR week's snapshot.
-
-    A section with no matching prior-week row (e.g. a brand-new
-    section that didn't exist last week) gets growth = NaN — we
-    genuinely don't know if it "grew," so we leave it undetermined
-    rather than guessing.
     """
     prior_lookup = df_prior[["class_nbr", "total_enrolled"]].rename(
         columns={"total_enrolled": "enrolled_prior"}
@@ -32,10 +24,6 @@ def add_growth_column(df_current, df_prior):
 def add_fill_rate(df):
     """
     Adds a 'fill_rate' column: enrolled / capacity.
-
-    Sections with zero or missing capacity get fill_rate = NaN
-    instead of a real value — dividing by zero would otherwise
-    crash, or worse, silently give a meaningless result.
     """
     df = df.copy()
     has_valid_capacity = df["enrollment_capacity"] > 0
@@ -50,7 +38,6 @@ def add_fill_rate(df):
 def add_critically_low_flag(df):
     """
     Adds a boolean 'critically_low' column.
-
     Rule: 9 or fewer students enrolled, OR under 25% fill.
     """
     df = df.copy()
@@ -65,9 +52,7 @@ def add_critically_low_flag(df):
 def add_low_not_growing_flag(df):
     """
     Adds a boolean 'low_not_growing' column.
-
-    Rule: under 50% fill AND no enrollment growth (growth <= 0)
-    in the latest snapshot. Critically Low takes precedence.
+    Rule: under 50% fill AND no growth. Critically Low takes precedence.
     """
     df = df.copy()
     has_valid_fill = df["fill_rate"].notna()
@@ -96,4 +81,9 @@ def classify_sections(df_current, df_prior):
     """
     Runs all steps in order and returns the enriched dataframe.
     """
-    df =
+    df = add_growth_column(df_current, df_prior)
+    df = add_fill_rate(df)
+    df = add_critically_low_flag(df)
+    df = add_low_not_growing_flag(df)
+    df = add_capacity_issue_flag(df)
+    return df
