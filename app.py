@@ -34,6 +34,8 @@ def load_data():
 
 df = load_data()
 
+df["start_date"] = pd.to_datetime(df["start_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+
 all_dates = sorted(df["snapshot_date"].unique())
 latest_date = all_dates[-1]
 prior_date = all_dates[-2] if len(all_dates) >= 2 else None
@@ -115,6 +117,14 @@ else:
 
     if selected_department != "All":
         latest_filtered = latest_filtered[latest_filtered["department"] == selected_department]
+
+    start_date_options = ["All"] + sorted(
+        latest_filtered["start_date"].dropna().unique().tolist()
+    )
+    selected_start_date = st.sidebar.selectbox("Start Date", start_date_options)
+
+    if selected_start_date != "All":
+        latest_filtered = latest_filtered[latest_filtered["start_date"] == selected_start_date]
 
     st.subheader("Department Breakdown")
     dept_prior_all = prior_week_full[prior_week_full["division"] == selected_division]
