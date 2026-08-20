@@ -197,7 +197,7 @@ else:
 
     st.divider()
 
-        st.subheader(f"Section Details — {latest_date}")
+    st.subheader(f"Section Details — {latest_date}")
     st.dataframe(
         latest_filtered[[
             "subject", "catalog", "descr", "faculty_name", "start_date",
