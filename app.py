@@ -118,13 +118,12 @@ else:
     if selected_department != "All":
         latest_filtered = latest_filtered[latest_filtered["department"] == selected_department]
 
-    start_date_options = ["All"] + sorted(
-        latest_filtered["start_date"].dropna().unique().tolist()
+    start_date_options = sorted(latest_filtered["start_date"].dropna().unique().tolist())
+    selected_start_dates = st.sidebar.multiselect(
+        "Start Date", start_date_options, default=start_date_options
     )
-    selected_start_date = st.sidebar.selectbox("Start Date", start_date_options)
 
-    if selected_start_date != "All":
-        latest_filtered = latest_filtered[latest_filtered["start_date"] == selected_start_date]
+    latest_filtered = latest_filtered[latest_filtered["start_date"].isin(selected_start_dates)]
 
     st.subheader("Department Breakdown")
     dept_prior_all = prior_week_full[prior_week_full["division"] == selected_division]
