@@ -11,17 +11,23 @@ along with the question, to Claude's API.
 import anthropic
 
 
-def build_context(scope_label, dept_display, modality_display,
-                   critically_low_df, low_not_growing_df, section_count):
+def build_context(scope_label, breakdown_display, modality_display,
+                   critically_low_df, low_not_growing_df, section_count,
+                   breakdown_label="DEPARTMENT BREAKDOWN"):
     """
     Turns the dataframes already being shown on screen into a plain
     text summary — this is what Claude actually "sees." Keeping it
     text (not raw dataframes) keeps the API call simple and cheap.
+
+    breakdown_display / breakdown_label: this is DEPARTMENT breakdown
+    on the drill-down page, or DIVISION breakdown on the landing
+    page — same shape of table, just grouped differently, so one
+    function handles both instead of writing it twice.
     """
     lines = [f"Enrollment data for: {scope_label}", f"Total sections: {section_count}", ""]
 
-    lines.append("DEPARTMENT BREAKDOWN:")
-    lines.append(dept_display.to_string(index=False))
+    lines.append(f"{breakdown_label}:")
+    lines.append(breakdown_display.to_string(index=False))
     lines.append("")
 
     lines.append("MODALITY BREAKDOWN:")
