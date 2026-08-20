@@ -10,6 +10,7 @@ import pandas as pd
 import sqlite3
 from classification import classify_sections
 from division_summary import build_division_comparison, build_department_comparison, build_modality_comparison
+from ai_assistant import build_context, ask_claude
 
 DB_PATH = "db/dashboard.db"
 
@@ -215,3 +216,42 @@ else:
         use_container_width=True,
         hide_index=True,
     )
+
+    st.divider()
+
+    st.subheader("Ask About This Data")
+    st.caption(f"Ask questions about {selected_division}" +
+               (f" — {selected_department}" if selected_department != "All" else ""))
+
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
+    user_question = st.chat_input("e.g. Which departments have the most critically low sections?")
+
+    if user_question:
+        with st.chat_message("user"):
+            st.write(user_question)
+        st.session_state.chat_history.append({"role": "user", "content": user_question})
+
+        context = build_context(
+            scope_label=f"{selected_division}" + (f" — {selected_department}" if selected_department != "All" else ""),
+            dept_display=dept_display,
+            modality_display=modality_display,
+            critically_low_df=critically_low_sections[["subject", "catalog", "total_enrolled", "enrollment_capacity"]],
+            low_not_growing_df=low_not_growing_sections[["subject", "catalog", "total_enrolled", "growth"]],
+            section_count=len(latest_filtered),
+        )
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                try:
+                    api_key = st.secrets["ANTHROPIC_API_KEY"]
+                    answer = ask_claude(api_key, context, user_question, st.session_state.chat_history[:-1])
+                    st.write(answer)
+                    st.session_state.chat_history.append({"role": "assistant", "content": answer})
+                except Exception as e:
+                    st.error(f"Couldn't get a response: {e}")
