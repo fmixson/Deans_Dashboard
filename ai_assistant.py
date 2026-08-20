@@ -13,16 +13,14 @@ import anthropic
 
 def build_context(scope_label, breakdown_display, modality_display,
                    critically_low_df, low_not_growing_df, section_count,
-                   breakdown_label="DEPARTMENT BREAKDOWN"):
+                   breakdown_label="DEPARTMENT BREAKDOWN", consolidation_df=None):
     """
     Turns the dataframes already being shown on screen into a plain
-    text summary — this is what Claude actually "sees." Keeping it
-    text (not raw dataframes) keeps the API call simple and cheap.
+    text summary — this is what Claude actually "sees."
 
-    breakdown_display / breakdown_label: this is DEPARTMENT breakdown
-    on the drill-down page, or DIVISION breakdown on the landing
-    page — same shape of table, just grouped differently, so one
-    function handles both instead of writing it twice.
+    consolidation_df: optional — courses with multiple sections where
+    at least one is struggling, shown side by side. Lets Claude reason
+    about whether sections could realistically be merged.
     """
     lines = [f"Enrollment data for: {scope_label}", f"Total sections: {section_count}", ""]
 
@@ -47,6 +45,19 @@ def build_context(scope_label, breakdown_display, modality_display,
     else:
         lines.append("None")
 
+    if consolidation_df is not None:
+        lines.append("")
+        lines.append(f"COURSES WITH MULTIPLE SECTIONS WHERE AT LEAST ONE IS STRUGGLING "
+                      f"({consolidation_df.groupby(['subject','catalog']).ngroups if len(consolidation_df) > 0 else 0} courses, "
+                      f"{len(consolidation_df)} total sections shown below):")
+        lines.append("This shows EVERY section of each affected course side by side (both full and "
+                      "struggling ones), so you can judge whether a struggling section's students could "
+                      "realistically move into a fuller section of the SAME course.")
+        if len(consolidation_df) > 0:
+            lines.append(consolidation_df.to_string(index=False))
+        else:
+            lines.append("None")
+
     return "\n".join(lines)
 
 
@@ -54,10 +65,6 @@ def ask_claude(api_key, context, question, conversation_history):
     """
     Sends the question to Claude, along with the data context and
     any prior turns in this chat (so follow-up questions work).
-
-    conversation_history: list of {"role": "user"/"assistant", "content": str}
-    from previous turns in THIS chat session — lets Claude remember
-    what was already asked.
     """
     client = anthropic.Anthropic(api_key=api_key)
 
@@ -67,7 +74,12 @@ def ask_claude(api_key, context, question, conversation_history):
         f"{context}\n\n"
         "Answer questions using ONLY this data. If something isn't in the data "
         "provided, say so rather than guessing. Be concise and direct — deans "
-        "are busy. Use specific numbers from the data when relevant."
+        "are busy. Use specific numbers from the data when relevant.\n\n"
+        "IMPORTANT LIMITATION: this data does NOT include meeting days/times, "
+        "so when discussing whether sections could be consolidated, you cannot "
+        "confirm their schedules don't conflict — mention this as a caveat when "
+        "making consolidation suggestions, and recommend the dean verify meeting "
+        "times before deciding."
     )
 
     messages = conversation_history + [{"role": "user", "content": question}]
