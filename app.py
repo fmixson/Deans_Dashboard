@@ -110,6 +110,56 @@ if selected_division == "All":
     })
     st.dataframe(modality_display, use_container_width=True, hide_index=True)
 
+    st.divider()
+
+    st.subheader("Ask About This Data")
+    st.caption("Ask questions about enrollment across all divisions")
+
+    if "chat_history_college" not in st.session_state:
+        st.session_state.chat_history_college = []
+
+    for message in st.session_state.chat_history_college:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
+    college_question = st.chat_input("e.g. Which division has the most critically low sections?")
+
+    if college_question:
+        with st.chat_message("user"):
+            st.write(college_question)
+        st.session_state.chat_history_college.append({"role": "user", "content": college_question})
+
+        college_critically_low = latest[
+            latest["critically_low"] & (latest["class_stat"] != "Cancelled Section")
+        ][["division", "department", "subject", "catalog", "total_enrolled", "enrollment_capacity"]]
+        college_low_not_growing = latest[
+            latest["low_not_growing"] & (latest["class_stat"] != "Cancelled Section")
+        ][["division", "department", "subject", "catalog", "total_enrolled", "growth"]]
+
+        context = build_context(
+            scope_label="All Divisions (College-Wide)",
+            breakdown_display=comparison[[
+                "division", "current_sections", "prior_sections", "section_change",
+                "current_enrolled", "prior_enrolled", "current_fill",
+                "critically_low", "low_not_growing", "cancelled",
+            ]],
+            breakdown_label="DIVISION BREAKDOWN",
+            modality_display=modality_display,
+            critically_low_df=college_critically_low,
+            low_not_growing_df=college_low_not_growing,
+            section_count=len(latest),
+        )
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                try:
+                    api_key = st.secrets["ANTHROPIC_API_KEY"]
+                    answer = ask_claude(api_key, context, college_question, st.session_state.chat_history_college[:-1])
+                    st.write(answer)
+                    st.session_state.chat_history_college.append({"role": "assistant", "content": answer})
+                except Exception as e:
+                    st.error(f"Couldn't get a response: {e}")
+
 else:
     dept_options = ["All"] + sorted(
         latest_filtered["department"].dropna().unique().tolist()
@@ -239,7 +289,8 @@ else:
 
         context = build_context(
             scope_label=f"{selected_division}" + (f" — {selected_department}" if selected_department != "All" else ""),
-            dept_display=dept_display,
+            breakdown_display=dept_display,
+            breakdown_label="DEPARTMENT BREAKDOWN",
             modality_display=modality_display,
             critically_low_df=critically_low_sections[["subject", "catalog", "total_enrolled", "enrollment_capacity"]],
             low_not_growing_df=low_not_growing_sections[["subject", "catalog", "total_enrolled", "growth"]],
