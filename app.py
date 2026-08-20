@@ -164,12 +164,14 @@ else:
     st.divider()
 
     st.subheader("Critically Low Sections")
-    st.caption("9 or fewer students enrolled, or under 25% fill")
+    st.caption("9 or fewer students enrolled, or under 25% fill (excludes cancelled sections)")
 
-    critically_low_sections = latest_filtered[latest_filtered["critically_low"]].copy()
+    critically_low_sections = latest_filtered[
+        latest_filtered["critically_low"] & (latest_filtered["class_stat"] != "Cancelled Section")
+    ].copy()
     st.dataframe(
         critically_low_sections[[
-            "subject", "catalog", "descr", "faculty_name",
+            "subject", "catalog", "descr", "faculty_name", "start_date",
             "total_enrolled", "enrollment_capacity", "fill_rate", "class_stat"
         ]],
         use_container_width=True,
@@ -179,12 +181,14 @@ else:
     st.divider()
 
     st.subheader("Low & Not Growing Sections")
-    st.caption("Under 50% fill, with no enrollment growth from last week")
+    st.caption("Under 50% fill, with no enrollment growth from last week (excludes cancelled sections)")
 
-    low_not_growing_sections = latest_filtered[latest_filtered["low_not_growing"]].copy()
+    low_not_growing_sections = latest_filtered[
+        latest_filtered["low_not_growing"] & (latest_filtered["class_stat"] != "Cancelled Section")
+    ].copy()
     st.dataframe(
         low_not_growing_sections[[
-            "subject", "catalog", "descr", "faculty_name",
+            "subject", "catalog", "descr", "faculty_name", "start_date",
             "total_enrolled", "enrollment_capacity", "fill_rate", "growth"
         ]],
         use_container_width=True,
