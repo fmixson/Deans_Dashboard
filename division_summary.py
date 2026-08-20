@@ -2,26 +2,13 @@
 division_summary.py
 --------------------
 Builds comparison tables (current vs. prior week) grouped by either
-division or department. One general function does the real work;
-two thin "wrapper" functions call it with the right grouping column
-so the rest of the app can keep using clear, specific names.
+division, department, or modality.
 """
 
 import pandas as pd
 
 
 def build_group_comparison(current, prior, group_col, total_label="TOTAL"):
-    """
-    General version: groups by whatever column you pass in
-    (e.g. "division" or "department") instead of always dividing by
-    division. This is the SAME logic as before — just written once
-    instead of copy-pasted for each grouping we need.
-
-    current: the LATEST week's classified sections.
-    prior:   the PRIOR week's raw sections.
-    group_col: the column name to group by, e.g. "division" or "department".
-    total_label: what to call the summary row at the bottom.
-    """
     current_agg = current.groupby(group_col).agg(
         current_sections=(group_col, "count"),
         current_enrolled=("total_enrolled", "sum"),
@@ -75,10 +62,12 @@ def build_group_comparison(current, prior, group_col, total_label="TOTAL"):
 
 
 def build_division_comparison(current, prior):
-    """Division-level comparison — used on the landing page."""
     return build_group_comparison(current, prior, "division", total_label="TOTAL / COLLEGE AVG")
 
 
 def build_department_comparison(current, prior):
-    """Department-level comparison — used on the division drill-down page."""
     return build_group_comparison(current, prior, "department", total_label="TOTAL / DIVISION AVG")
+
+
+def build_modality_comparison(current, prior):
+    return build_group_comparison(current, prior, "instruction_mode", total_label="TOTAL")
