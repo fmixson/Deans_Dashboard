@@ -11,6 +11,7 @@ import sqlite3
 from classification import classify_sections
 from division_summary import build_division_comparison, build_department_comparison, build_modality_comparison
 from ai_assistant import build_context, ask_claude
+from consolidation import find_multi_section_courses
 
 DB_PATH = "db/dashboard.db"
 
@@ -257,6 +258,18 @@ else:
 
     st.divider()
 
+    st.subheader("Consolidation Candidates")
+    st.caption("Courses with multiple sections where at least one section is struggling — compare side by side")
+
+    consolidation_candidates = find_multi_section_courses(latest_filtered)
+    st.dataframe(
+        consolidation_candidates,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.divider()
+
     st.subheader(f"Section Details — {latest_date}")
     st.dataframe(
         latest_filtered[[
@@ -295,6 +308,7 @@ else:
             critically_low_df=critically_low_sections[["subject", "catalog", "start_date", "total_enrolled", "enrollment_capacity"]],
             low_not_growing_df=low_not_growing_sections[["subject", "catalog", "start_date", "total_enrolled", "growth"]],
             section_count=len(latest_filtered),
+            consolidation_df=consolidation_candidates,
         )
 
         with st.chat_message("assistant"):
