@@ -9,7 +9,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from classification import classify_sections
-from division_summary import build_division_comparison, build_department_comparison
+from division_summary import build_division_comparison, build_department_comparison, build_modality_comparison
 
 DB_PATH = "db/dashboard.db"
 
@@ -22,7 +22,7 @@ def load_data():
     df = pd.read_sql("""
         SELECT cs.division, cs.department, cs.subject, cs.catalog, cs.descr,
                cs.faculty_name, cs.enrollment_capacity, cs.waitlist_capacity,
-               cs.start_date, ws.class_nbr,
+               cs.start_date, cs.instruction_mode, ws.class_nbr,
                ws.snapshot_date, ws.total_enrolled, ws.seats_available,
                ws.total_on_waitlist, ws.class_stat
         FROM weekly_snapshot ws
@@ -86,10 +86,40 @@ if selected_division == "All":
     )
     st.caption("Select a division from the sidebar to see its detailed breakdown.")
 
+    st.divider()
+
+    st.subheader("Modality Breakdown — College-Wide")
+    modality_comparison = build_modality_comparison(latest, prior_week_full)
+    modality_display = modality_comparison[[
+        "instruction_mode", "current_sections", "prior_sections",
+        "current_enrolled", "prior_enrolled", "enrolled_change",
+        "current_fill", "critically_low", "low_not_growing",
+    ]].rename(columns={
+        "instruction_mode": "Modality",
+        "current_sections": "Current Sections",
+        "prior_sections": "Prior Sections",
+        "current_enrolled": "Current Enrolled",
+        "prior_enrolled": "Prior Enrolled",
+        "enrolled_change": "Change",
+        "current_fill": "Current Fill",
+        "critically_low": "Critically Low",
+        "low_not_growing": "Low & Not Growing",
+    })
+    st.dataframe(modality_display, use_container_width=True, hide_index=True)
+
 else:
+    dept_options = ["All"] + sorted(
+        latest_filtered["department"].dropna().unique().tolist()
+    )
+    selected_department = st.sidebar.selectbox("Department", dept_options)
+
+    if selected_department != "All":
+        latest_filtered = latest_filtered[latest_filtered["department"] == selected_department]
+
     st.subheader("Department Breakdown")
-    dept_prior = prior_week_full[prior_week_full["division"] == selected_division]
-    dept_comparison = build_department_comparison(latest_filtered, dept_prior)
+    dept_prior_all = prior_week_full[prior_week_full["division"] == selected_division]
+    latest_division_all = latest[latest["division"] == selected_division]
+    dept_comparison = build_department_comparison(latest_division_all, dept_prior_all)
     dept_display = dept_comparison[[
         "department", "current_sections", "prior_sections",
         "current_enrolled", "prior_enrolled", "enrolled_change",
@@ -109,44 +139,53 @@ else:
 
     st.divider()
 
-    st.subheader(f"Enrollment Trend — {selected_division}")
-    trend = (
-        filtered.groupby(["snapshot_date", "division"])["total_enrolled"]
-        .sum()
-        .reset_index()
-        .pivot(index="snapshot_date", columns="division", values="total_enrolled")
-    )
-    st.line_chart(trend)
+    st.subheader("Modality Breakdown")
+    dept_prior_scoped = dept_prior_all
+    if selected_department != "All":
+        dept_prior_scoped = dept_prior_all[dept_prior_all["department"] == selected_department]
+    modality_comparison = build_modality_comparison(latest_filtered, dept_prior_scoped)
+    modality_display = modality_comparison[[
+        "instruction_mode", "current_sections", "prior_sections",
+        "current_enrolled", "prior_enrolled", "enrolled_change",
+        "current_fill", "critically_low", "low_not_growing",
+    ]].rename(columns={
+        "instruction_mode": "Modality",
+        "current_sections": "Current Sections",
+        "prior_sections": "Prior Sections",
+        "current_enrolled": "Current Enrolled",
+        "prior_enrolled": "Prior Enrolled",
+        "enrolled_change": "Change",
+        "current_fill": "Current Fill",
+        "critically_low": "Critically Low",
+        "low_not_growing": "Low & Not Growing",
+    })
+    st.dataframe(modality_display, use_container_width=True, hide_index=True)
 
-    st.subheader("At-Risk Sections")
-    st.caption("Critically low, low & not growing, or cancelled — starting within 4 weeks")
+    st.divider()
 
-    at_risk_mask = (
-        latest_filtered["critically_low"] |
-        latest_filtered["low_not_growing"] |
-        (latest_filtered["class_stat"] == "Cancelled Section")
-    )
-    at_risk = latest_filtered[at_risk_mask].copy()
+    st.subheader("Critically Low Sections")
+    st.caption("9 or fewer students enrolled, or under 25% fill")
 
-    at_risk["start_date_parsed"] = pd.to_datetime(at_risk["start_date"], errors="coerce")
-    weeks_until_start = (at_risk["start_date_parsed"] - pd.Timestamp.now()).dt.days / 7
-    at_risk = at_risk[weeks_until_start < 4]
-
-    def risk_reason(row):
-        if row["class_stat"] == "Cancelled Section":
-            return "Cancelled"
-        if row["critically_low"]:
-            return "Critically low enrollment"
-        if row["low_not_growing"]:
-            return "Low fill, not growing"
-        return "Other"
-
-    at_risk["risk_reason"] = at_risk.apply(risk_reason, axis=1)
-
+    critically_low_sections = latest_filtered[latest_filtered["critically_low"]].copy()
     st.dataframe(
-        at_risk[[
+        critically_low_sections[[
             "subject", "catalog", "descr", "faculty_name",
-            "total_enrolled", "enrollment_capacity", "fill_rate", "risk_reason"
+            "total_enrolled", "enrollment_capacity", "fill_rate", "class_stat"
+        ]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.divider()
+
+    st.subheader("Low & Not Growing Sections")
+    st.caption("Under 50% fill, with no enrollment growth from last week")
+
+    low_not_growing_sections = latest_filtered[latest_filtered["low_not_growing"]].copy()
+    st.dataframe(
+        low_not_growing_sections[[
+            "subject", "catalog", "descr", "faculty_name",
+            "total_enrolled", "enrollment_capacity", "fill_rate", "growth"
         ]],
         use_container_width=True,
         hide_index=True,
