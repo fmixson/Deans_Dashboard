@@ -23,6 +23,15 @@ def build_context(scope_label, breakdown_display, modality_display,
     about whether sections could realistically be merged.
     """
     lines = [f"Enrollment data for: {scope_label}", f"Total sections: {section_count}", ""]
+    lines.append(
+        "Note: where present, the 'trail' column shows a section's enrollment "
+        "over the last 4 snapshots (oldest to newest, e.g. '2 → 2 → 3 → 0'); "
+        "'—' means no data existed for that week (the section didn't exist yet). "
+        "'total_on_waitlist' shows students currently waiting for a seat — a low-enrolled "
+        "section WITH a meaningful waitlist likely has a scheduling problem (wrong time/day), "
+        "not a demand problem."
+    )
+    lines.append("")
 
     lines.append(f"{breakdown_label}:")
     lines.append(breakdown_display.to_string(index=False))
