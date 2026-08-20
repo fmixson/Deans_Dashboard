@@ -5,6 +5,7 @@ Loads one week's "CER_SR_CLASS_DETAILS" Excel export into dashboard.db.
 
 Usage:
     python3 load_weekly_report.py path/to/report.xlsx
+    python3 load_weekly_report.py path/to/report.xlsx 2026-08-10   (for historical files)
 """
 
 import sys
@@ -15,12 +16,9 @@ from datetime import date
 DB_PATH = "dashboard.db"
 
 
-def load_report(xlsx_path: str):
+def load_report(xlsx_path: str, override_date: str = None):
     df = pd.read_excel(xlsx_path, header=2)
 
-    # DEDUPLICATE — the source export sometimes repeats the exact
-    # same class section 2-4 times. class_nbr should be unique, so
-    # we keep only the first occurrence of each one.
     before = len(df)
     df = df.drop_duplicates(subset=["Class Nbr"], keep="first")
     duplicates_removed = before - len(df)
@@ -28,7 +26,7 @@ def load_report(xlsx_path: str):
         print(f"  Removed {duplicates_removed} duplicate rows from source file")
     print(f"Read {len(df)} rows from {xlsx_path}")
 
-    snapshot_date = date.today().isoformat()
+    snapshot_date = override_date if override_date else date.today().isoformat()
 
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -40,13 +38,14 @@ def load_report(xlsx_path: str):
                 class_nbr, term, session, subject, catalog, descr,
                 component, section_number, faculty_name, division,
                 department, modality_location, start_date, end_date,
-                enrollment_capacity, waitlist_capacity
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                enrollment_capacity, waitlist_capacity, instruction_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(class_nbr) DO UPDATE SET
                 session=excluded.session,
                 faculty_name=excluded.faculty_name,
                 enrollment_capacity=excluded.enrollment_capacity,
-                waitlist_capacity=excluded.waitlist_capacity
+                waitlist_capacity=excluded.waitlist_capacity,
+                instruction_mode=excluded.instruction_mode
         """, (
             int(row["Class Nbr"]), int(row["Term"]), row["Session"],
             row["Subject"], str(row["Catalog"]), row["Descr"],
@@ -55,6 +54,7 @@ def load_report(xlsx_path: str):
             str(row["Start Date"]), str(row["End Date"]),
             _safe_int(row["Enrollment Capacity"]),
             _safe_int(row["Waitlist Capacity"]),
+            row["Instruction Mode"],
         ))
         section_rows += 1
 
@@ -84,14 +84,16 @@ def load_report(xlsx_path: str):
 
 
 def _safe_int(value):
-    """Excel gives us NaN for blank cells; sqlite wants None instead."""
     if pd.isna(value):
         return None
     return int(value)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python3 load_weekly_report.py path/to/report.xlsx")
+    if len(sys.argv) not in (2, 3):
+        print("Usage: python3 load_weekly_report.py path/to/report.xlsx [YYYY-MM-DD]")
+        print("  The date is optional — omit it to use today's date.")
         sys.exit(1)
-    load_report(sys.argv[1])
+    file_path = sys.argv[1]
+    date_override = sys.argv[2] if len(sys.argv) == 3 else None
+    load_report(file_path, date_override)
