@@ -131,10 +131,10 @@ if selected_division == "All":
 
         college_critically_low = latest[
             latest["critically_low"] & (latest["class_stat"] != "Cancelled Section")
-        ][["division", "department", "subject", "catalog", "total_enrolled", "enrollment_capacity"]]
+        ][["division", "department", "subject", "catalog", "start_date", "total_enrolled", "enrollment_capacity"]]
         college_low_not_growing = latest[
             latest["low_not_growing"] & (latest["class_stat"] != "Cancelled Section")
-        ][["division", "department", "subject", "catalog", "total_enrolled", "growth"]]
+        ][["division", "department", "subject", "catalog", "start_date", "total_enrolled", "growth"]]
 
         context = build_context(
             scope_label="All Divisions (College-Wide)",
@@ -292,8 +292,8 @@ else:
             breakdown_display=dept_display,
             breakdown_label="DEPARTMENT BREAKDOWN",
             modality_display=modality_display,
-            critically_low_df=critically_low_sections[["subject", "catalog", "total_enrolled", "enrollment_capacity"]],
-            low_not_growing_df=low_not_growing_sections[["subject", "catalog", "total_enrolled", "growth"]],
+            critically_low_df=critically_low_sections[["subject", "catalog", "start_date", "total_enrolled", "enrollment_capacity"]],
+            low_not_growing_df=low_not_growing_sections[["subject", "catalog", "start_date", "total_enrolled", "growth"]],
             section_count=len(latest_filtered),
         )
 
