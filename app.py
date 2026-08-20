@@ -12,6 +12,8 @@ from classification import classify_sections
 from division_summary import build_division_comparison, build_department_comparison, build_modality_comparison
 from ai_assistant import build_context, ask_claude
 from consolidation import find_multi_section_courses
+from enrollment_trail import build_trail
+from key_takeaways import generate_takeaways
 
 DB_PATH = "db/dashboard.db"
 
@@ -52,6 +54,9 @@ else:
 
 latest = classify_sections(current_week, prior_week)
 
+trail_data = build_trail(df, n_weeks=4)
+latest = latest.merge(trail_data, on="class_nbr", how="left")
+
 st.title("Enrollment Dashboard")
 st.caption(f"Latest data as of {latest_date}")
 
@@ -75,24 +80,7 @@ else:
 latest_filtered = latest if selected_division == "All" else latest[latest["division"] == selected_division]
 
 if selected_division == "All":
-    st.subheader("Division Comparison")
-    st.caption(f"Current week ({latest_date}) vs. prior week ({prior_date})")
-
     comparison = build_division_comparison(latest, prior_week_full)
-    st.dataframe(
-        comparison[[
-            "division", "current_sections", "prior_sections", "section_change",
-            "current_enrolled", "prior_enrolled", "current_fill",
-            "critically_low", "low_not_growing", "cancelled",
-        ]],
-        use_container_width=True,
-        hide_index=True,
-    )
-    st.caption("Select a division from the sidebar to see its detailed breakdown.")
-
-    st.divider()
-
-    st.subheader("Modality Breakdown — College-Wide")
     modality_comparison = build_modality_comparison(latest, prior_week_full)
     modality_display = modality_comparison[[
         "instruction_mode", "current_sections", "prior_sections",
@@ -109,6 +97,59 @@ if selected_division == "All":
         "critically_low": "Critically Low",
         "low_not_growing": "Low & Not Growing",
     })
+
+    college_critically_low = latest[
+        latest["critically_low"] & (latest["class_stat"] != "Cancelled Section")
+    ][["division", "department", "subject", "catalog", "start_date", "total_enrolled", "enrollment_capacity", "total_on_waitlist", "trail"]]
+    college_low_not_growing = latest[
+        latest["low_not_growing"] & (latest["class_stat"] != "Cancelled Section")
+    ][["division", "department", "subject", "catalog", "start_date", "total_enrolled", "growth", "total_on_waitlist", "trail"]]
+
+    college_context = build_context(
+        scope_label="All Divisions (College-Wide)",
+        breakdown_display=comparison[[
+            "division", "current_sections", "prior_sections", "section_change",
+            "current_enrolled", "prior_enrolled", "current_fill",
+            "critically_low", "low_not_growing", "cancelled",
+        ]],
+        breakdown_label="DIVISION BREAKDOWN",
+        modality_display=modality_display,
+        critically_low_df=college_critically_low,
+        low_not_growing_df=college_low_not_growing,
+        section_count=len(latest),
+    )
+
+    st.subheader("Key Takeaways")
+    if st.button("Generate Key Takeaways", key="takeaways_button_college"):
+        with st.spinner("Analyzing..."):
+            try:
+                api_key = st.secrets["ANTHROPIC_API_KEY"]
+                st.session_state["takeaways_college"] = generate_takeaways(api_key, college_context)
+            except Exception as e:
+                st.error(f"Couldn't generate takeaways: {e}")
+
+    if "takeaways_college" in st.session_state:
+        st.markdown(st.session_state["takeaways_college"])
+
+    st.divider()
+
+    st.subheader("Division Comparison")
+    st.caption(f"Current week ({latest_date}) vs. prior week ({prior_date})")
+
+    st.dataframe(
+        comparison[[
+            "division", "current_sections", "prior_sections", "section_change",
+            "current_enrolled", "prior_enrolled", "current_fill",
+            "critically_low", "low_not_growing", "cancelled",
+        ]],
+        use_container_width=True,
+        hide_index=True,
+    )
+    st.caption("Select a division from the sidebar to see its detailed breakdown.")
+
+    st.divider()
+
+    st.subheader("Modality Breakdown — College-Wide")
     st.dataframe(modality_display, use_container_width=True, hide_index=True)
 
     st.divider()
@@ -130,32 +171,11 @@ if selected_division == "All":
             st.write(college_question)
         st.session_state.chat_history_college.append({"role": "user", "content": college_question})
 
-        college_critically_low = latest[
-            latest["critically_low"] & (latest["class_stat"] != "Cancelled Section")
-        ][["division", "department", "subject", "catalog", "start_date", "total_enrolled", "enrollment_capacity"]]
-        college_low_not_growing = latest[
-            latest["low_not_growing"] & (latest["class_stat"] != "Cancelled Section")
-        ][["division", "department", "subject", "catalog", "start_date", "total_enrolled", "growth"]]
-
-        context = build_context(
-            scope_label="All Divisions (College-Wide)",
-            breakdown_display=comparison[[
-                "division", "current_sections", "prior_sections", "section_change",
-                "current_enrolled", "prior_enrolled", "current_fill",
-                "critically_low", "low_not_growing", "cancelled",
-            ]],
-            breakdown_label="DIVISION BREAKDOWN",
-            modality_display=modality_display,
-            critically_low_df=college_critically_low,
-            low_not_growing_df=college_low_not_growing,
-            section_count=len(latest),
-        )
-
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
                     api_key = st.secrets["ANTHROPIC_API_KEY"]
-                    answer = ask_claude(api_key, context, college_question, st.session_state.chat_history_college[:-1])
+                    answer = ask_claude(api_key, college_context, college_question, st.session_state.chat_history_college[:-1])
                     st.write(answer)
                     st.session_state.chat_history_college.append({"role": "assistant", "content": answer})
                 except Exception as e:
@@ -177,7 +197,6 @@ else:
 
     latest_filtered = latest_filtered[latest_filtered["start_date"].isin(selected_start_dates)]
 
-    st.subheader("Department Breakdown")
     dept_prior_all = prior_week_full[prior_week_full["division"] == selected_division]
     latest_division_all = latest[latest["division"] == selected_division]
     dept_comparison = build_department_comparison(latest_division_all, dept_prior_all)
@@ -196,11 +215,7 @@ else:
         "critically_low": "Critically Low",
         "low_not_growing": "Low & Not Growing",
     })
-    st.dataframe(dept_display, use_container_width=True, hide_index=True)
 
-    st.divider()
-
-    st.subheader("Modality Breakdown")
     dept_prior_scoped = dept_prior_all
     if selected_department != "All":
         dept_prior_scoped = dept_prior_all[dept_prior_all["department"] == selected_department]
@@ -220,20 +235,61 @@ else:
         "critically_low": "Critically Low",
         "low_not_growing": "Low & Not Growing",
     })
+
+    critically_low_sections = latest_filtered[
+        latest_filtered["critically_low"] & (latest_filtered["class_stat"] != "Cancelled Section")
+    ].copy()
+
+    low_not_growing_sections = latest_filtered[
+        latest_filtered["low_not_growing"] & (latest_filtered["class_stat"] != "Cancelled Section")
+    ].copy()
+
+    consolidation_candidates = find_multi_section_courses(latest_filtered)
+
+    drill_scope_label = f"{selected_division}" + (f" — {selected_department}" if selected_department != "All" else "")
+    drill_context = build_context(
+        scope_label=drill_scope_label,
+        breakdown_display=dept_display,
+        breakdown_label="DEPARTMENT BREAKDOWN",
+        modality_display=modality_display,
+        critically_low_df=critically_low_sections[["subject", "catalog", "start_date", "total_enrolled", "enrollment_capacity", "total_on_waitlist", "trail"]],
+        low_not_growing_df=low_not_growing_sections[["subject", "catalog", "start_date", "total_enrolled", "growth", "total_on_waitlist", "trail"]],
+        section_count=len(latest_filtered),
+        consolidation_df=consolidation_candidates,
+    )
+
+    st.subheader("Key Takeaways")
+    takeaways_key = f"takeaways_{drill_scope_label}"
+    if st.button("Generate Key Takeaways", key="takeaways_button_drilldown"):
+        with st.spinner("Analyzing..."):
+            try:
+                api_key = st.secrets["ANTHROPIC_API_KEY"]
+                st.session_state[takeaways_key] = generate_takeaways(api_key, drill_context)
+            except Exception as e:
+                st.error(f"Couldn't generate takeaways: {e}")
+
+    if takeaways_key in st.session_state:
+        st.markdown(st.session_state[takeaways_key])
+
+    st.divider()
+
+    st.subheader("Department Breakdown")
+    st.dataframe(dept_display, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    st.subheader("Modality Breakdown")
     st.dataframe(modality_display, use_container_width=True, hide_index=True)
 
     st.divider()
 
     st.subheader("Critically Low Sections")
     st.caption("9 or fewer students enrolled, or under 25% fill (excludes cancelled sections)")
-
-    critically_low_sections = latest_filtered[
-        latest_filtered["critically_low"] & (latest_filtered["class_stat"] != "Cancelled Section")
-    ].copy()
     st.dataframe(
         critically_low_sections[[
             "subject", "catalog", "descr", "faculty_name", "start_date",
-            "total_enrolled", "enrollment_capacity", "fill_rate", "class_stat"
+            "total_enrolled", "enrollment_capacity", "fill_rate",
+            "total_on_waitlist", "trail", "class_stat"
         ]],
         use_container_width=True,
         hide_index=True,
@@ -243,14 +299,11 @@ else:
 
     st.subheader("Low & Not Growing Sections")
     st.caption("Under 50% fill, with no enrollment growth from last week (excludes cancelled sections)")
-
-    low_not_growing_sections = latest_filtered[
-        latest_filtered["low_not_growing"] & (latest_filtered["class_stat"] != "Cancelled Section")
-    ].copy()
     st.dataframe(
         low_not_growing_sections[[
             "subject", "catalog", "descr", "faculty_name", "start_date",
-            "total_enrolled", "enrollment_capacity", "fill_rate", "growth"
+            "total_enrolled", "enrollment_capacity", "fill_rate",
+            "total_on_waitlist", "trail", "growth"
         ]],
         use_container_width=True,
         hide_index=True,
@@ -260,8 +313,6 @@ else:
 
     st.subheader("Consolidation Candidates")
     st.caption("Courses with multiple sections where at least one section is struggling — compare side by side")
-
-    consolidation_candidates = find_multi_section_courses(latest_filtered)
     st.dataframe(
         consolidation_candidates,
         use_container_width=True,
@@ -283,8 +334,7 @@ else:
     st.divider()
 
     st.subheader("Ask About This Data")
-    st.caption(f"Ask questions about {selected_division}" +
-               (f" — {selected_department}" if selected_department != "All" else ""))
+    st.caption(f"Ask questions about {drill_scope_label}")
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
@@ -300,22 +350,11 @@ else:
             st.write(user_question)
         st.session_state.chat_history.append({"role": "user", "content": user_question})
 
-        context = build_context(
-            scope_label=f"{selected_division}" + (f" — {selected_department}" if selected_department != "All" else ""),
-            breakdown_display=dept_display,
-            breakdown_label="DEPARTMENT BREAKDOWN",
-            modality_display=modality_display,
-            critically_low_df=critically_low_sections[["subject", "catalog", "start_date", "total_enrolled", "enrollment_capacity"]],
-            low_not_growing_df=low_not_growing_sections[["subject", "catalog", "start_date", "total_enrolled", "growth"]],
-            section_count=len(latest_filtered),
-            consolidation_df=consolidation_candidates,
-        )
-
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
                     api_key = st.secrets["ANTHROPIC_API_KEY"]
-                    answer = ask_claude(api_key, context, user_question, st.session_state.chat_history[:-1])
+                    answer = ask_claude(api_key, drill_context, user_question, st.session_state.chat_history[:-1])
                     st.write(answer)
                     st.session_state.chat_history.append({"role": "assistant", "content": answer})
                 except Exception as e:
