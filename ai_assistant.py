@@ -18,18 +18,6 @@ def build_context(scope_label, breakdown_display, modality_display,
     """
     Turns the dataframes already being shown on screen into a plain
     text summary — this is what Claude actually "sees."
-
-    consolidation_df: optional — courses with multiple sections where
-    at least one is struggling, shown side by side.
-
-    expansion_df: optional — courses with at least one section that's
-    nearly/fully full AND has a meaningful waitlist — candidates for
-    ADDING a section, the opposite signal from consolidation.
-
-    full_roster_df: optional — EVERY section in the current scope
-    (not just struggling ones), so Claude can answer broader
-    questions like "what is Professor X teaching?" instead of only
-    knowing about problem sections.
     """
     lines = [f"Enrollment data for: {scope_label}", f"Total sections: {section_count}", ""]
     lines.append(
@@ -78,13 +66,16 @@ def build_context(scope_label, breakdown_display, modality_display,
 
     if expansion_df is not None:
         lines.append("")
-        lines.append(f"COURSES WITH POSSIBLE UNMET DEMAND — at least one section is 90%+ full "
-                      f"WITH 3+ students on the waitlist ({expansion_df.groupby(['subject','catalog']).ngroups if len(expansion_df) > 0 else 0} courses, "
-                      f"{len(expansion_df)} total sections shown below):")
-        lines.append("This shows EVERY section of each affected course. 'high_demand'=True marks the "
-                      "specific section(s) that triggered inclusion. Use this to judge whether an "
-                      "additional section might be warranted — but note this does NOT account for "
-                      "room or faculty availability, which the dean would need to verify separately.")
+        lines.append(f"COURSES WITH POSSIBLE UNMET DEMAND — for each course+modality combination "
+                      f"(e.g. 'ACCT 100, Online'), the COMBINED waitlist across all its sections is "
+                      f"at least 50% the size of one section "
+                      f"({expansion_df.groupby(['subject','catalog','instruction_mode']).ngroups if len(expansion_df) > 0 else 0} "
+                      f"course+modality groups, {len(expansion_df)} total sections shown below):")
+        lines.append("'group_total_waitlist' is the COMBINED waitlist across every section of that "
+                      "course+modality (not just this one row); 'waitlist_ratio' is that total divided "
+                      "by one section's capacity — a ratio of 1.0 means the waitlist alone could fill "
+                      "an entire additional section. This does NOT account for room or faculty "
+                      "availability, which the dean would need to verify separately.")
         if len(expansion_df) > 0:
             lines.append(expansion_df.to_string(index=False))
         else:
