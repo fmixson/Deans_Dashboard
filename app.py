@@ -75,6 +75,13 @@ else:
 latest_filtered = latest if selected_division == "All" else latest[latest["division"] == selected_division]
 
 if selected_division == "All":
+    start_date_options = sorted(latest["start_date"].dropna().unique().tolist())
+    selected_start_dates = st.sidebar.multiselect(
+        "Start Date", start_date_options, default=start_date_options
+    )
+    latest = latest[latest["start_date"].isin(selected_start_dates)]
+    prior_week_full = prior_week_full[prior_week_full["start_date"].isin(selected_start_dates)]
+
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total Sections", len(latest))
     col2.metric("Total Enrolled", int(latest["total_enrolled"].sum()))
