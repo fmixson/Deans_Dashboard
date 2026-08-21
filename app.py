@@ -12,6 +12,7 @@ from classification import classify_sections
 from division_summary import build_division_comparison, build_department_comparison, build_modality_comparison
 from ai_assistant import build_context, ask_claude
 from consolidation import find_multi_section_courses
+from expansion import find_expansion_candidates
 from enrollment_trail import build_trail
 from key_takeaways import generate_takeaways
 
@@ -245,6 +246,7 @@ else:
     ].copy()
 
     consolidation_candidates = find_multi_section_courses(latest_filtered)
+    expansion_candidates = find_expansion_candidates(latest_filtered)
 
     drill_scope_label = f"{selected_division}" + (f" — {selected_department}" if selected_department != "All" else "")
     drill_context = build_context(
@@ -256,6 +258,7 @@ else:
         low_not_growing_df=low_not_growing_sections[["subject", "catalog", "start_date", "total_enrolled", "growth", "total_on_waitlist", "trail"]],
         section_count=len(latest_filtered),
         consolidation_df=consolidation_candidates,
+        expansion_df=expansion_candidates,
         full_roster_df=latest_filtered[[
             "department", "subject", "catalog", "faculty_name",
             "start_date", "total_enrolled", "enrollment_capacity", "class_stat"
@@ -319,6 +322,16 @@ else:
     st.caption("Courses with multiple sections where at least one section is struggling — compare side by side")
     st.dataframe(
         consolidation_candidates,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.divider()
+
+    st.subheader("Expansion Candidates")
+    st.caption("Courses where at least one section is 90%+ full with 3+ students waitlisted — possible candidates for an additional section")
+    st.dataframe(
+        expansion_candidates,
         use_container_width=True,
         hide_index=True,
     )
