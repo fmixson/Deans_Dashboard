@@ -2,42 +2,54 @@
 expansion.py
 -------------
 Finds courses that might need an ADDITIONAL section — the mirror
-image of consolidation.py. A section is "high demand" when it's
-nearly/fully full AND has a meaningful waitlist (students turned
-away, not just idle capacity).
+image of consolidation.py.
+
+Rule: for each course + modality combination (e.g. "ACCT 100,
+Online"), add up the waitlist across ALL its sections, then compare
+that total to the size of just ONE section. If the waiting list
+alone is big enough to fill half a section, that's a strong signal
+there's real unmet demand for that specific modality.
 """
 
 import pandas as pd
 
 
-def find_expansion_candidates(df, fill_threshold=0.90, min_waitlist=3):
+def find_expansion_candidates(df, waitlist_ratio_threshold=0.5):
     """
-    fill_threshold: how full a section must be (0.90 = 90%+) to
-        count as "high demand" on its own.
-    min_waitlist: minimum students waiting to count as meaningful
-        demand, not just a couple of stragglers.
+    waitlist_ratio_threshold: 0.5 means "the combined waitlist for
+        this course+modality is at least half the size of one section."
 
-    Returns every section belonging to a course where AT LEAST ONE
-    section meets both the fill and waitlist thresholds.
+    Returns every section belonging to a (course, modality) group
+    that meets the threshold, with the group's combined waitlist
+    and ratio attached to each row.
     """
     active = df[df["class_stat"] != "Cancelled Section"].copy()
 
-    active["high_demand"] = (
-        (active["fill_rate"] >= fill_threshold) &
-        (active["total_on_waitlist"] >= min_waitlist)
+    group_cols = ["subject", "catalog", "instruction_mode"]
+
+    group_stats = active.groupby(group_cols).agg(
+        group_total_waitlist=("total_on_waitlist", "sum"),
+        group_avg_capacity=("enrollment_capacity", "mean"),
+    ).reset_index()
+
+    group_stats["waitlist_ratio"] = (
+        group_stats["group_total_waitlist"] / group_stats["group_avg_capacity"]
+    )
+    group_stats["high_demand_group"] = group_stats["waitlist_ratio"] >= waitlist_ratio_threshold
+
+    active = active.merge(
+        group_stats[group_cols + ["group_total_waitlist", "waitlist_ratio", "high_demand_group"]],
+        on=group_cols, how="left"
     )
 
-    active["course_has_high_demand"] = active.groupby(
-        ["subject", "catalog"]
-    )["high_demand"].transform("max")
-
-    candidates = active[active["course_has_high_demand"]].copy()
+    candidates = active[active["high_demand_group"]].copy()
     candidates = candidates.sort_values(
-        ["subject", "catalog", "total_enrolled"], ascending=[True, True, False]
+        ["subject", "catalog", "instruction_mode", "total_enrolled"],
+        ascending=[True, True, True, False]
     )
 
     return candidates[[
-        "subject", "catalog", "class_nbr", "faculty_name", "instruction_mode",
+        "subject", "catalog", "instruction_mode", "class_nbr", "faculty_name",
         "start_date", "total_enrolled", "enrollment_capacity", "fill_rate",
-        "total_on_waitlist", "high_demand",
+        "total_on_waitlist", "group_total_waitlist", "waitlist_ratio",
     ]]
