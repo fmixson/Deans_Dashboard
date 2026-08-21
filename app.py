@@ -93,15 +93,13 @@ if selected_division == "All":
     comparison = build_division_comparison(latest, prior_week_full)
     modality_comparison = build_modality_comparison(latest, prior_week_full)
     modality_display = modality_comparison[[
-        "instruction_mode", "current_sections", "prior_sections",
-        "current_enrolled", "prior_enrolled", "enrolled_change",
+        "instruction_mode", "current_sections",
+        "current_enrolled", "enrolled_change",
         "current_fill", "critically_low", "low_not_growing",
     ]].rename(columns={
         "instruction_mode": "Modality",
         "current_sections": "Current Sections",
-        "prior_sections": "Prior Sections",
         "current_enrolled": "Current Enrolled",
-        "prior_enrolled": "Prior Enrolled",
         "enrolled_change": "Change",
         "current_fill": "Current Fill",
         "critically_low": "Critically Low",
@@ -148,8 +146,8 @@ if selected_division == "All":
 
     st.dataframe(
         comparison[[
-            "division", "current_sections", "prior_sections", "section_change",
-            "current_enrolled", "prior_enrolled", "current_fill",
+            "division", "current_sections", "section_change",
+            "current_enrolled", "current_fill",
             "critically_low", "low_not_growing", "cancelled",
         ]],
         use_container_width=True,
@@ -219,15 +217,13 @@ else:
     latest_division_all = latest[latest["division"] == selected_division]
     dept_comparison = build_department_comparison(latest_division_all, dept_prior_all)
     dept_display = dept_comparison[[
-        "department", "current_sections", "prior_sections",
-        "current_enrolled", "prior_enrolled", "enrolled_change",
+        "department", "current_sections",
+        "current_enrolled", "enrolled_change",
         "current_fill", "critically_low", "low_not_growing",
     ]].rename(columns={
         "department": "Dept",
         "current_sections": "Current Sections",
-        "prior_sections": "Prior Sections",
         "current_enrolled": "Current Enrolled",
-        "prior_enrolled": "Prior Enrolled",
         "enrolled_change": "Change",
         "current_fill": "Current Fill",
         "critically_low": "Critically Low",
@@ -239,15 +235,13 @@ else:
         dept_prior_scoped = dept_prior_all[dept_prior_all["department"] == selected_department]
     modality_comparison = build_modality_comparison(latest_filtered, dept_prior_scoped)
     modality_display = modality_comparison[[
-        "instruction_mode", "current_sections", "prior_sections",
-        "current_enrolled", "prior_enrolled", "enrolled_change",
+        "instruction_mode", "current_sections",
+        "current_enrolled", "enrolled_change",
         "current_fill", "critically_low", "low_not_growing",
     ]].rename(columns={
         "instruction_mode": "Modality",
         "current_sections": "Current Sections",
-        "prior_sections": "Prior Sections",
         "current_enrolled": "Current Enrolled",
-        "prior_enrolled": "Prior Enrolled",
         "enrolled_change": "Change",
         "current_fill": "Current Fill",
         "critically_low": "Critically Low",
@@ -336,7 +330,7 @@ else:
     st.divider()
 
     st.subheader("Consolidation Candidates")
-    st.caption("Courses with multiple sections where at least one section is struggling — compare side by side")
+    st.caption("Courses with multiple sections in the SAME modality where at least one is struggling — compare side by side")
     st.dataframe(
         consolidation_candidates,
         use_container_width=True,
