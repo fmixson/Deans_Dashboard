@@ -256,6 +256,10 @@ else:
         low_not_growing_df=low_not_growing_sections[["subject", "catalog", "start_date", "total_enrolled", "growth", "total_on_waitlist", "trail"]],
         section_count=len(latest_filtered),
         consolidation_df=consolidation_candidates,
+        full_roster_df=latest_filtered[[
+            "department", "subject", "catalog", "faculty_name",
+            "start_date", "total_enrolled", "enrollment_capacity", "class_stat"
+        ]],
     )
 
     st.subheader("Key Takeaways")
