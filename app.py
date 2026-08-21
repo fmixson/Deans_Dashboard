@@ -61,12 +61,6 @@ latest = latest.merge(trail_data, on="class_nbr", how="left")
 st.title("Enrollment Dashboard")
 st.caption(f"Latest data as of {latest_date}")
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Sections", len(latest))
-col2.metric("Total Enrolled", int(latest["total_enrolled"].sum()))
-col3.metric("Critically Low", int(latest["critically_low"].sum()))
-col4.metric("Low & Not Growing", int(latest["low_not_growing"].sum()))
-
 st.divider()
 
 st.sidebar.header("Filters")
@@ -81,6 +75,14 @@ else:
 latest_filtered = latest if selected_division == "All" else latest[latest["division"] == selected_division]
 
 if selected_division == "All":
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Total Sections", len(latest))
+    col2.metric("Total Enrolled", int(latest["total_enrolled"].sum()))
+    col3.metric("Critically Low", int(latest["critically_low"].sum()))
+    col4.metric("Low & Not Growing", int(latest["low_not_growing"].sum()))
+
+    st.divider()
+
     comparison = build_division_comparison(latest, prior_week_full)
     modality_comparison = build_modality_comparison(latest, prior_week_full)
     modality_display = modality_comparison[[
@@ -197,6 +199,14 @@ else:
     )
 
     latest_filtered = latest_filtered[latest_filtered["start_date"].isin(selected_start_dates)]
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Total Sections", len(latest_filtered))
+    col2.metric("Total Enrolled", int(latest_filtered["total_enrolled"].sum()))
+    col3.metric("Critically Low", int(latest_filtered["critically_low"].sum()))
+    col4.metric("Low & Not Growing", int(latest_filtered["low_not_growing"].sum()))
+
+    st.divider()
 
     dept_prior_all = prior_week_full[prior_week_full["division"] == selected_division]
     latest_division_all = latest[latest["division"] == selected_division]
