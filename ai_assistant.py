@@ -13,14 +13,19 @@ import anthropic
 
 def build_context(scope_label, breakdown_display, modality_display,
                    critically_low_df, low_not_growing_df, section_count,
-                   breakdown_label="DEPARTMENT BREAKDOWN", consolidation_df=None):
+                   breakdown_label="DEPARTMENT BREAKDOWN", consolidation_df=None,
+                   full_roster_df=None):
     """
     Turns the dataframes already being shown on screen into a plain
     text summary — this is what Claude actually "sees."
 
     consolidation_df: optional — courses with multiple sections where
-    at least one is struggling, shown side by side. Lets Claude reason
-    about whether sections could realistically be merged.
+    at least one is struggling, shown side by side.
+
+    full_roster_df: optional — EVERY section in the current scope
+    (not just struggling ones), so Claude can answer broader
+    questions like "what is Professor X teaching?" instead of only
+    knowing about problem sections.
     """
     lines = [f"Enrollment data for: {scope_label}", f"Total sections: {section_count}", ""]
     lines.append(
@@ -66,6 +71,13 @@ def build_context(scope_label, breakdown_display, modality_display,
             lines.append(consolidation_df.to_string(index=False))
         else:
             lines.append("None")
+
+    if full_roster_df is not None:
+        lines.append("")
+        lines.append(f"COMPLETE SECTION ROSTER — EVERY section in this scope, not just struggling "
+                      f"ones ({len(full_roster_df)} total). Use this for questions about specific "
+                      f"instructors, courses, or sections not mentioned in the lists above:")
+        lines.append(full_roster_df.to_string(index=False))
 
     return "\n".join(lines)
 
