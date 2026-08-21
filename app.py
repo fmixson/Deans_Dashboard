@@ -329,7 +329,7 @@ else:
     st.divider()
 
     st.subheader("Expansion Candidates")
-        st.caption("Courses where the combined waitlist across all sections of a modality is 50%+ the size of one section — possible candidates for an additional section")
+    st.caption("Courses where the combined waitlist across all sections of a modality is 50%+ the size of one section — possible candidates for an additional section")
     st.dataframe(
         expansion_candidates,
         use_container_width=True,
