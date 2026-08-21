@@ -14,13 +14,17 @@ import anthropic
 def build_context(scope_label, breakdown_display, modality_display,
                    critically_low_df, low_not_growing_df, section_count,
                    breakdown_label="DEPARTMENT BREAKDOWN", consolidation_df=None,
-                   full_roster_df=None):
+                   expansion_df=None, full_roster_df=None):
     """
     Turns the dataframes already being shown on screen into a plain
     text summary — this is what Claude actually "sees."
 
     consolidation_df: optional — courses with multiple sections where
     at least one is struggling, shown side by side.
+
+    expansion_df: optional — courses with at least one section that's
+    nearly/fully full AND has a meaningful waitlist — candidates for
+    ADDING a section, the opposite signal from consolidation.
 
     full_roster_df: optional — EVERY section in the current scope
     (not just struggling ones), so Claude can answer broader
@@ -69,6 +73,20 @@ def build_context(scope_label, breakdown_display, modality_display,
                       "realistically move into a fuller section of the SAME course.")
         if len(consolidation_df) > 0:
             lines.append(consolidation_df.to_string(index=False))
+        else:
+            lines.append("None")
+
+    if expansion_df is not None:
+        lines.append("")
+        lines.append(f"COURSES WITH POSSIBLE UNMET DEMAND — at least one section is 90%+ full "
+                      f"WITH 3+ students on the waitlist ({expansion_df.groupby(['subject','catalog']).ngroups if len(expansion_df) > 0 else 0} courses, "
+                      f"{len(expansion_df)} total sections shown below):")
+        lines.append("This shows EVERY section of each affected course. 'high_demand'=True marks the "
+                      "specific section(s) that triggered inclusion. Use this to judge whether an "
+                      "additional section might be warranted — but note this does NOT account for "
+                      "room or faculty availability, which the dean would need to verify separately.")
+        if len(expansion_df) > 0:
+            lines.append(expansion_df.to_string(index=False))
         else:
             lines.append("None")
 
