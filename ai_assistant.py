@@ -18,6 +18,18 @@ def build_context(scope_label, breakdown_display, modality_display,
     """
     Turns the dataframes already being shown on screen into a plain
     text summary — this is what Claude actually "sees."
+
+    consolidation_df: optional — courses with multiple sections where
+    at least one is struggling, shown side by side.
+
+    expansion_df: optional — courses with at least one section that's
+    nearly/fully full AND has a meaningful waitlist — candidates for
+    ADDING a section, the opposite signal from consolidation.
+
+    full_roster_df: optional — EVERY section in the current scope
+    (not just struggling ones), so Claude can answer broader
+    questions like "what is Professor X teaching?" instead of only
+    knowing about problem sections.
     """
     lines = [f"Enrollment data for: {scope_label}", f"Total sections: {section_count}", ""]
     lines.append(
@@ -53,12 +65,16 @@ def build_context(scope_label, breakdown_display, modality_display,
 
     if consolidation_df is not None:
         lines.append("")
-        lines.append(f"COURSES WITH MULTIPLE SECTIONS WHERE AT LEAST ONE IS STRUGGLING "
-                      f"({consolidation_df.groupby(['subject','catalog']).ngroups if len(consolidation_df) > 0 else 0} courses, "
+        lines.append(f"COURSE+MODALITY GROUPS WITH MULTIPLE SECTIONS WHERE AT LEAST ONE IS STRUGGLING "
+                      f"({consolidation_df.groupby(['subject','catalog','instruction_mode']).ngroups if len(consolidation_df) > 0 else 0} groups, "
                       f"{len(consolidation_df)} total sections shown below):")
-        lines.append("This shows EVERY section of each affected course side by side (both full and "
-                      "struggling ones), so you can judge whether a struggling section's students could "
-                      "realistically move into a fuller section of the SAME course.")
+        lines.append("Each group is the SAME course in the SAME modality (e.g. 'BA 100, Online') — "
+                      "sections in DIFFERENT modalities of the same course are NOT grouped together, "
+                      "since a student in an online section usually can't be moved into an in-person "
+                      "one. This shows EVERY section within each affected course+modality group (both "
+                      "full and struggling ones), so you can judge whether a struggling section's "
+                      "students could realistically move into a fuller section of the SAME course AND "
+                      "SAME modality.")
         if len(consolidation_df) > 0:
             lines.append(consolidation_df.to_string(index=False))
         else:
