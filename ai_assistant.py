@@ -18,25 +18,17 @@ def build_context(scope_label, breakdown_display, modality_display,
     """
     Turns the dataframes already being shown on screen into a plain
     text summary — this is what Claude actually "sees."
-
-    consolidation_df: optional — courses with multiple sections where
-    at least one is struggling, shown side by side.
-
-    expansion_df: optional — courses with at least one section that's
-    nearly/fully full AND has a meaningful waitlist — candidates for
-    ADDING a section, the opposite signal from consolidation.
-
-    full_roster_df: optional — EVERY section in the current scope
-    (not just struggling ones), so Claude can answer broader
-    questions like "what is Professor X teaching?" instead of only
-    knowing about problem sections.
     """
     lines = [f"Enrollment data for: {scope_label}", f"Total sections: {section_count}", ""]
     lines.append(
         "Note: 'Critically Low', 'Low & Not Growing', and 'Consolidation' lists below only "
         "include sections starting within 30 days (or already started) — a section starting "
         "months from now is SUPPOSED to look empty right now, that's normal registration "
-        "timing, not a real problem."
+        "timing, not a real problem. Also, when a course has EXACTLY one 'E' (lecture) type "
+        "section and one 'N' (lab) type section with IDENTICAL enrollment and capacity, only "
+        "the 'E' one is counted — this avoids double-counting one lecture+lab enrollment "
+        "relationship as two separate problems. Courses with multiple E or N sections are NOT "
+        "affected by this rule, since those may be legitimate separate sections."
     )
     lines.append(
         "Note: where present, the 'trail' column shows a section's enrollment "
