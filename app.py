@@ -316,7 +316,7 @@ else:
     st.caption("9 or fewer students enrolled, or under 25% fill — sections starting within 30 days (excludes cancelled sections)")
     st.dataframe(
         critically_low_sections[[
-            "subject", "catalog", "descr", "faculty_name", "start_date",
+            "class_nbr", "subject", "catalog", "descr", "faculty_name", "start_date",
             "total_enrolled", "enrollment_capacity", "fill_rate",
             "total_on_waitlist", "trail", "class_stat"
         ]],
@@ -330,7 +330,7 @@ else:
     st.caption("Under 50% fill, with no enrollment growth from last week — sections starting within 30 days (excludes cancelled sections)")
     st.dataframe(
         low_not_growing_sections[[
-            "subject", "catalog", "descr", "faculty_name", "start_date",
+            "class_nbr", "subject", "catalog", "descr", "faculty_name", "start_date",
             "total_enrolled", "enrollment_capacity", "fill_rate",
             "total_on_waitlist", "trail", "growth"
         ]],
