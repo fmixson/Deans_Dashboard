@@ -58,6 +58,10 @@ latest = classify_sections(current_week, prior_week)
 trail_data = build_trail(df, n_weeks=4)
 latest = latest.merge(trail_data, on="class_nbr", how="left")
 
+today = pd.Timestamp.now().normalize()
+latest["days_until_start"] = (pd.to_datetime(latest["start_date"], errors="coerce") - today).dt.days
+latest["eligible_for_risk_lists"] = latest["days_until_start"] <= 30
+
 st.title("Enrollment Dashboard")
 st.caption(f"Latest data as of {latest_date}")
 
@@ -85,8 +89,8 @@ if selected_division == "All":
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total Sections", len(latest))
     col2.metric("Total Enrolled", int(latest["total_enrolled"].sum()))
-    col3.metric("Critically Low", int(latest["critically_low"].sum()))
-    col4.metric("Low & Not Growing", int(latest["low_not_growing"].sum()))
+    col3.metric("Critically Low", int((latest["critically_low"] & latest["eligible_for_risk_lists"]).sum()))
+    col4.metric("Low & Not Growing", int((latest["low_not_growing"] & latest["eligible_for_risk_lists"]).sum()))
 
     st.divider()
 
@@ -107,10 +111,10 @@ if selected_division == "All":
     })
 
     college_critically_low = latest[
-        latest["critically_low"] & (latest["class_stat"] != "Cancelled Section")
+        latest["critically_low"] & (latest["class_stat"] != "Cancelled Section") & latest["eligible_for_risk_lists"]
     ][["division", "department", "subject", "catalog", "start_date", "total_enrolled", "enrollment_capacity", "total_on_waitlist", "trail"]]
     college_low_not_growing = latest[
-        latest["low_not_growing"] & (latest["class_stat"] != "Cancelled Section")
+        latest["low_not_growing"] & (latest["class_stat"] != "Cancelled Section") & latest["eligible_for_risk_lists"]
     ][["division", "department", "subject", "catalog", "start_date", "total_enrolled", "growth", "total_on_waitlist", "trail"]]
 
     college_context = build_context(
@@ -208,8 +212,8 @@ else:
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total Sections", len(latest_filtered))
     col2.metric("Total Enrolled", int(latest_filtered["total_enrolled"].sum()))
-    col3.metric("Critically Low", int(latest_filtered["critically_low"].sum()))
-    col4.metric("Low & Not Growing", int(latest_filtered["low_not_growing"].sum()))
+    col3.metric("Critically Low", int((latest_filtered["critically_low"] & latest_filtered["eligible_for_risk_lists"]).sum()))
+    col4.metric("Low & Not Growing", int((latest_filtered["low_not_growing"] & latest_filtered["eligible_for_risk_lists"]).sum()))
 
     st.divider()
 
@@ -249,14 +253,14 @@ else:
     })
 
     critically_low_sections = latest_filtered[
-        latest_filtered["critically_low"] & (latest_filtered["class_stat"] != "Cancelled Section")
+        latest_filtered["critically_low"] & (latest_filtered["class_stat"] != "Cancelled Section") & latest_filtered["eligible_for_risk_lists"]
     ].copy()
 
     low_not_growing_sections = latest_filtered[
-        latest_filtered["low_not_growing"] & (latest_filtered["class_stat"] != "Cancelled Section")
+        latest_filtered["low_not_growing"] & (latest_filtered["class_stat"] != "Cancelled Section") & latest_filtered["eligible_for_risk_lists"]
     ].copy()
 
-    consolidation_candidates = find_multi_section_courses(latest_filtered)
+    consolidation_candidates = find_multi_section_courses(latest_filtered[latest_filtered["eligible_for_risk_lists"]])
     expansion_candidates = find_expansion_candidates(latest_filtered)
 
     drill_scope_label = f"{selected_division}" + (f" — {selected_department}" if selected_department != "All" else "")
@@ -302,7 +306,7 @@ else:
     st.divider()
 
     st.subheader("Critically Low Sections")
-    st.caption("9 or fewer students enrolled, or under 25% fill (excludes cancelled sections)")
+    st.caption("9 or fewer students enrolled, or under 25% fill — sections starting within 30 days (excludes cancelled sections)")
     st.dataframe(
         critically_low_sections[[
             "subject", "catalog", "descr", "faculty_name", "start_date",
@@ -316,7 +320,7 @@ else:
     st.divider()
 
     st.subheader("Low & Not Growing Sections")
-    st.caption("Under 50% fill, with no enrollment growth from last week (excludes cancelled sections)")
+    st.caption("Under 50% fill, with no enrollment growth from last week — sections starting within 30 days (excludes cancelled sections)")
     st.dataframe(
         low_not_growing_sections[[
             "subject", "catalog", "descr", "faculty_name", "start_date",
@@ -330,7 +334,7 @@ else:
     st.divider()
 
     st.subheader("Consolidation Candidates")
-    st.caption("Courses with multiple sections in the SAME modality where at least one is struggling — compare side by side")
+    st.caption("Courses with multiple sections in the SAME modality where at least one is struggling — sections starting within 30 days — compare side by side")
     st.dataframe(
         consolidation_candidates,
         use_container_width=True,
