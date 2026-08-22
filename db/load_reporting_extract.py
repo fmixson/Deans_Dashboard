@@ -7,8 +7,6 @@ used by load_weekly_report.py.
 
 Usage:
     python3 load_reporting_extract.py path/to/report.xlsx
-
-The snapshot date is read directly from the file's DAY_DATE column.
 """
 
 import sys
@@ -51,14 +49,15 @@ def load_report(xlsx_path: str):
                 class_nbr, term, session, subject, catalog, descr,
                 component, section_number, faculty_name, division,
                 department, modality_location, start_date, end_date,
-                enrollment_capacity, waitlist_capacity, instruction_mode
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                enrollment_capacity, waitlist_capacity, instruction_mode, class_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(class_nbr) DO UPDATE SET
                 session=excluded.session,
                 faculty_name=excluded.faculty_name,
                 enrollment_capacity=excluded.enrollment_capacity,
                 waitlist_capacity=excluded.waitlist_capacity,
-                instruction_mode=excluded.instruction_mode
+                instruction_mode=excluded.instruction_mode,
+                class_type=excluded.class_type
         """, (
             int(row["CLASS_NBR"]), int(row["STRM"]), str(row.get("SESSION_CODE")),
             row.get("SUBJECT"), str(row.get("COURSE")),
@@ -69,6 +68,7 @@ def load_report(xlsx_path: str):
             _safe_int(row.get("CLASS_CAPACITY")),
             None,
             row.get("Modality_Combined"),
+            row.get("CLASS_TYPE"),
         ))
         section_rows += 1
 
