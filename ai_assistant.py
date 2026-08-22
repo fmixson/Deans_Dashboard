@@ -33,6 +33,12 @@ def build_context(scope_label, breakdown_display, modality_display,
     """
     lines = [f"Enrollment data for: {scope_label}", f"Total sections: {section_count}", ""]
     lines.append(
+        "Note: 'Critically Low', 'Low & Not Growing', and 'Consolidation' lists below only "
+        "include sections starting within 30 days (or already started) — a section starting "
+        "months from now is SUPPOSED to look empty right now, that's normal registration "
+        "timing, not a real problem."
+    )
+    lines.append(
         "Note: where present, the 'trail' column shows a section's enrollment "
         "over the last 4 snapshots (oldest to newest, e.g. '2 → 2 → 3 → 0'); "
         "'—' means no data existed for that week (the section didn't exist yet). "
